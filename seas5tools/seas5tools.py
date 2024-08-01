@@ -256,3 +256,24 @@ class SEAS5():
                                             vname=vname, lat_range=lat_range, lon_range=lon_range)
                             for fpath in fpaths], dim='time')
         return xr.Dataset({'mean': da_mean, 'stdev': da_stdev})
+
+# If running the module as a whole, only download a single month's forecast
+if __name__ == '__main__':
+    # Always assume that cdsapi_key, vname and outpath will be passed
+    cdsapi_key = sys.argv[1]
+    outpath = sys.argv[2]
+    vname = sys.argv[3]
+
+    seas5 = SEAS5(cdsapi_key)
+    if len(sys.argv) == 4:
+        # No year or month passed
+        now = dt.date.today()
+        seas5.download(vname, outpath, year_range=(now.year, now.year),
+                       months=[now.month], hindcast=False, forecast=True, 
+                       overwrite=False)
+    else:
+        year = sys.argv[4]
+        month = sys.argv[5]
+        seas5.download(vname, outpath, year_range=(int(year), int(year)),
+                       months=[int(month)], hindcast=False, forecast=True, 
+                       overwrite=False)
