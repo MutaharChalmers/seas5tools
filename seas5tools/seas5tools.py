@@ -121,27 +121,20 @@ class SEAS5():
         if months is None:
             months = range(1,13)
 
-        # Write downloads to logfile - track in case download fails
-        if not os.path.exists(os.path.join(outpath, 'downloads.log')):
-            with open(os.path.join(outpath, 'downloads.log'), 'w') as f:
-                f.write('Logfile\n')
-        with open(os.path.join(outpath, 'downloads.log'), 'a') as f:
-            for year in years:
-                for month in months:
-                    fname = f'{vname}_{year}_{month:02}.grib'
-                    f.write(f'Processing {vname} {year}-{month:02}...')
-                    if not overwrite and os.path.exists(os.path.join(outpath, fname)):
-                        print(f'Skipping {fname} as it exists in directory.')
-                        pass
-                    else:
-                        try:
-                            self._get_seas51_month(vname, year, month, outpath)
-                            f.write('Complete\n')
-                        except:
-                            print(f'*** FAILED {vname} {year}-{month:02} ***')
-                            f.write(f'*** FAILED ***\n')
+        # Loop over years and months
+        for year in years:
+            for month in months:
+                fname = f'{vname}_{year}_{month:02}.grib'
+                if not overwrite and os.path.exists(os.path.join(outpath, fname)):
+                    print(f'Skipping {fname} as it exists in directory.')
+                else:
+                    try:
+                        self._get_seas51_month(vname, year, month, outpath)
+                    except:
+                        print(f'*** FAILED {vname} {year}-{month:02} ***')
 
-    def convert(self, ds, vname, lat_range=(None,None), lon_range=(None,None)):
+    def convert(self, ds, vname, additive, lat_range=(None,None),
+                lon_range=(None,None)):
         """Convert units and structure of raw files.
 
         Currently supported variables:
@@ -152,10 +145,16 @@ class SEAS5():
 
         Parameters
         ----------
-            ds : xarray.Dataset
-                Dataset with dims ['number','step','latitude','longitude'].
+            ds : xarray Dataset or DataArray
+                Dataset or DataArray with dims
+                ['number','step','latitude','longitude'].
             vname : str
                 Variable name (internal).
+            additive : bool
+                Flag additive conversions (e.g. K => C for temperature)
+                which applies only to the mean not to the standard deviation.
+                Contrast multiplicative conversions (like m/s => mm for precip)
+                which apply to both the mean and the standard deviation.
             lat_range : (float, float), optional
                 Latitude range subset to use.
             lon_range : (float, float), optional
@@ -163,8 +162,8 @@ class SEAS5():
 
         Returns
         -------
-            da : xarray.DataArray
-                Pre-processed DataArray.
+            ds : xarray Dataset or DataArray
+                Converted Dataset or DataArray.
         """
 
         # Sense check that only a single month is being used
@@ -192,20 +191,31 @@ class SEAS5():
         if vname == 'pre':
             # Precipitation conversion factor from m/second to mm/day
             days_per_month = ds.time.dt.days_in_month
-            da = ds['tprate'] * days_per_month * secs_per_day * mm_per_m
-        elif vname in ['tmax','tmin','sst']:
+            ds = ds['tprate'] * days_per_month * secs_per_day * mm_per_m
+        elif vname in ['tmax','tmin','sst'] and additive:
             # Temperature conversion from Kelvin to Celsius
-            da = ds[self.varmap_da[vname]] + K_to_C
+            ds = ds[self.varmap_da[vname]] + K_to_C
         else:
             print(f'vname must be one of {list(self.varmap_da.keys())}')
             return None
 
         # Slice to lat/lon bounding box and return
-        da = da.sel(latitude=slice(*lat_range), longitude=slice(*lon_range))
-        return da
+        ds = da.sel(latitude=slice(*lat_range), longitude=slice(*lon_range))
+        return ds
+
+    def _to_monthly(self, ds):
+        """Convert timestamp dimension into ['year','month'] dimensions."""
+        year = ds.time.dt.year
+        month = ds.time.dt.month
+
+        # Assign new coords
+        ds = ds.assign_coords(year=('time', year.data), month=('time', month.data))
+
+        # reshape the array to (..., 'month', 'year')
+        return ds.set_index(time=('year', 'month')).unstack('time')
 
     def proc(self, inpath, vname, month, year_range=(None, None), hindcast=False,
-             forecast=True, lat_range=(None, None), lon_range=(None, None)):
+             forecast=True, to_monthly=True, lat_range=(None, None), lon_range=(None, None)):
         """Process multiple SEAS5 seasonal forecasts on single levels.
 
         Process seasonal forecast monthly statistics on single levels for a
@@ -248,14 +258,17 @@ class SEAS5():
         da_mean = xr.concat([self.convert(xr.open_dataset(fpath,
                                                           filter_by_keys={'dataType': 'fcmean'},
                                                           engine='cfgrib'),
-                                           vname=vname, lat_range=lat_range, lon_range=lon_range)
+                                          vname=vname, additive=True,
+                                          lat_range=lat_range, lon_range=lon_range)
                             for fpath in fpaths], dim='time')
         da_stdev = xr.concat([self.convert(xr.open_dataset(fpath,
                                                            filter_by_keys={'dataType': 'fcstdev'},
                                                            engine='cfgrib'),
-                                            vname=vname, lat_range=lat_range, lon_range=lon_range)
+                                           vname=vname, additive=False,
+                                           lat_range=lat_range, lon_range=lon_range)
                             for fpath in fpaths], dim='time')
-        return xr.Dataset({'mean': da_mean, 'stdev': da_stdev})
+        return xr.Dataset({'mean': da_mean if not to_monthly else self._to_monthly(da_mean),
+                           'stdev': da_stdev if not to_monthly else self._to_monthly(da_stdev)})
 
 # If running the module as a whole, only download a single month's forecast
 if __name__ == '__main__':
