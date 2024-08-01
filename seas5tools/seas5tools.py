@@ -43,7 +43,7 @@ class SEAS5():
                           'sst': 'sst',
                           **varmap_da}
 
-    def year_range2years(self, year_range=(None,None), hindcast=False, forecast=True):
+    def _year_range2years(self, year_range=(None,None), hindcast=False, forecast=True):
         """Convenience function to convert a year_range tuple to a working range
         accounting for hindcast and forecast availability.
         """
@@ -74,20 +74,19 @@ class SEAS5():
         years = range(min(years_set), max(years_set)+1)
         return years
 
-    def get_seas51_month(self, vname, year, month, outpath=None):
-        """Function to retrieve seasonal surface forecasts at monthly resolution
-        from ECMWF SEAS5 system.
+    def _get_seas51_month(self, vname, year, month, outpath):
+        """Function to retrieve seasonal surface forecasts at monthly
+        resolution from ECMWF SEAS5 system in grib format.
         """
 
         fname = f'{vname}_{year}_{month:02}.grib'
-
-        # Need to have instantiated a cdsapi Client object
         self.c.retrieve('seasonal-monthly-single-levels',
                         {'format': 'grib',
                          'originating_centre': 'ecmwf',
                          'system': '51',
                          'variable': self.varmap[vname],
-                         'product_type': ['monthly_mean','monthly_standard_deviation',
+                         'product_type': ['monthly_mean',
+                                          'monthly_standard_deviation',
                                           'monthly_maximum','monthly_minimum'],
                          'year': year,
                          'month': month,
@@ -118,7 +117,7 @@ class SEAS5():
                 Defaults to False.
         """
 
-        years = self.year_range2years(year_range, hindcast, forecast)
+        years = self._year_range2years(year_range, hindcast, forecast)
         if months is None:
             months = range(1,13)
 
@@ -136,19 +135,14 @@ class SEAS5():
                         pass
                     else:
                         try:
-                            self.get_seas51_month(vname, year, month, outpath)
+                            self._get_seas51_month(vname, year, month, outpath)
                             f.write('Complete\n')
                         except:
                             print(f'*** FAILED {vname} {year}-{month:02} ***')
                             f.write(f'*** FAILED ***\n')
 
-    def preproc(self, ds, vname, lat_range=(None, None), lon_range=(None,None)):
-        """Pre-process SEAS5 seasonal monthly statistics on single levels.
-
-        Pre-process seasonal forecast monthly statistics on single levels for a
-        single month-variable. Assumes standard System 51 file structure in
-        xarray Dataset format with dimensions [number, step, latitude, longitude],
-        converts to a Dataset with dimensions [number, time, latitude, longitude].
+    def convert(self, ds, vname, lat_range=(None,None), lon_range=(None,None)):
+        """Convert units and structure of raw files.
 
         Currently supported variables:
             pre - precipitation [tprate, m/s => mm]
@@ -159,8 +153,7 @@ class SEAS5():
         Parameters
         ----------
             ds : xarray.Dataset
-                Dataset with dimensions ['number','step','latitude','longitude']
-                otherwise.
+                Dataset with dims ['number','step','latitude','longitude'].
             vname : str
                 Variable name (internal).
             lat_range : (float, float), optional
@@ -211,11 +204,11 @@ class SEAS5():
         da = da.sel(latitude=slice(*lat_range), longitude=slice(*lon_range))
         return da
 
-    def preproc_all(self, inpath, vname, month, year_range=(None, None), hindcast=False,
-                    forecast=True, lat_range=(None, None), lon_range=(None, None)):
-        """Pre-process multiple SEAS5 seasonal monthly statistics on single levels.
+    def proc(self, inpath, vname, month, year_range=(None, None), hindcast=False,
+             forecast=True, lat_range=(None, None), lon_range=(None, None)):
+        """Process multiple SEAS5 seasonal forecasts on single levels.
 
-        Pre-process seasonal forecast monthly statistics on single levels for a
+        Process seasonal forecast monthly statistics on single levels for a
         single month-variable. Assumes standard SEAS5 System 51 file structure
         with an internally-defined filename convention, and files in
         xarray Dataset format with dimensions [number, step, latitude, longitude],
@@ -243,19 +236,23 @@ class SEAS5():
         Returns
         -------
             ds : xarray.Dataset
-                Pre-processed Dataset.
+                Processed Dataset.
         """
 
         # Generate all file paths
-        years = self.year_range2years(year_range, hindcast, forecast)
+        years = self._year_range2years(year_range, hindcast, forecast)
         fpaths = [os.path.join(inpath, f'{vname}_{year}_{month:02}.grib')
                   for year in years]
 
         # Generate combined DataArray for all months for this variable
-        da_mean = xr.concat([self.preproc(xr.open_dataset(fpath, filter_by_keys={'dataType': 'fcmean'}),
-                                    vname=vname, lat_range=lat_range, lon_range=lon_range)
+        da_mean = xr.concat([self.convert(xr.open_dataset(fpath,
+                                                          filter_by_keys={'dataType': 'fcmean'},
+                                                          engine='cfgrib'),
+                                           vname=vname, lat_range=lat_range, lon_range=lon_range)
                             for fpath in fpaths], dim='time')
-        da_stdev = xr.concat([self.preproc(xr.open_dataset(fpath, filter_by_keys={'dataType': 'fcstdev'}),
-                                    vname=vname, lat_range=lat_range, lon_range=lon_range)
+        da_stdev = xr.concat([self.convert(xr.open_dataset(fpath,
+                                                           filter_by_keys={'dataType': 'fcstdev'},
+                                                           engine='cfgrib'),
+                                            vname=vname, lat_range=lat_range, lon_range=lon_range)
                             for fpath in fpaths], dim='time')
         return xr.Dataset({'mean': da_mean, 'stdev': da_stdev})

@@ -20,7 +20,8 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 requires-python = ">=3.8"
-dependencies = [ "numpy>=1.18", "scipy>=1.10", "xarray>=2023.01.0", "cdsapi>=0.7.0"
+dependencies = [ "numpy>=1.18", "scipy>=1.10", "xarray>=2023.01.0", 
+                 "cdsapi>=0.7.0","eccodes>=1.7.1","cfgrib>=0.9.14"
 ]
 
 [project.urls]
