@@ -200,7 +200,7 @@ class SEAS5():
             return None
 
         # Slice to lat/lon bounding box and return
-        ds = da.sel(latitude=slice(*lat_range), longitude=slice(*lon_range))
+        ds = ds.sel(latitude=slice(*lat_range), longitude=slice(*lon_range))
         return ds
 
     def _to_monthly(self, ds):
