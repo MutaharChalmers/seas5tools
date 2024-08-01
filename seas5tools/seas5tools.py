@@ -94,7 +94,7 @@ class SEAS5():
                         os.path.join(outpath, fname))
 
     def download(self, vname, outpath, year_range=(None,None), months=None,
-                hindcast=False, forecast=True, overwrite=False):
+                 hindcast=False, forecast=True, overwrite=False):
         """Download SEAS5 hindcast (1981-2016) or operational (2017-present)
         seasonal monthly statistics on single levels for a single variable.
 
@@ -195,6 +195,9 @@ class SEAS5():
         elif vname in ['tmax','tmin','sst'] and additive:
             # Temperature conversion from Kelvin to Celsius
             ds = ds[self.varmap_da[vname]] + K_to_C
+        elif  vname in ['tmax','tmin','sst']:
+            # No need to convert for e.g. stdev
+            ds = ds[self.varmap_da[vname]]
         else:
             print(f'vname must be one of {list(self.varmap_da.keys())}')
             return None
@@ -222,7 +225,8 @@ class SEAS5():
         single month-variable. Assumes standard SEAS5 System 51 file structure
         with an internally-defined filename convention, and files in
         xarray Dataset format with dimensions [number, step, latitude, longitude],
-        converts to a Dataset with dimensions [number, time, latitude, longitude].
+        converts to a Dataset with dimensions [number, time, latitude, longitude],
+        or [number, year, month, latitude, longitude] if to_monthly is True.
 
         Parameters
         ----------
@@ -238,6 +242,8 @@ class SEAS5():
                 Download hindcast data (1981-2016). Defaults to False.
             forecast : boolean, optional
                 Download forecast data (2017-present). Defaults to True.
+            to_monthly : boolean, optional
+                Convert datetimes to (year, month) dimensions.
             lat_range : (float, float), optional
                 Latitude range subset to use to fit the model.
             lon_range : (float, float), optional
