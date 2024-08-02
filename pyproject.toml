@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "seas5tools"
-version = "0.0.5"
+version = "0.0.6"
 description = "Tools for processing ECMWF SEAS5 seasonal forecasts"
 authors = [
            { name = "Mutahar Chalmers", email = "mutahar.chalmers@gmail.com" },
@@ -21,7 +21,8 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [ "numpy>=1.18", "scipy>=1.10", "xarray>=2023.01.0", 
-                 "cdsapi>=0.7.0","eccodes>=1.7.1","cfgrib>=0.9.14"
+                 "cdsapi>=0.7.0","eccodes>=1.7.1","cfgrib>=0.9.14",
+                 "zarr>=2.18"
 ]
 
 [project.urls]

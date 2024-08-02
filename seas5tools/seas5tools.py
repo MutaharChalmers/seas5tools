@@ -25,7 +25,13 @@ class SEAS5():
             Default variables include pre, tmax, tmin and sst.
         """
 
-        # Need a Copernicus Data Store (CDS) API key to download data
+        # List available precomputed climatologies for calculating anomalies
+        self.climpath = os.path.join(os.path.dirname(__file__), 'clims')
+        self.clims_available = [f.split('.')[0] for f in os.listdir(self.climpath)
+                                if not f.startswith('.')]
+        self.clim = None
+
+        # Need a Copernicus Data Store Beta (CDS-Beta) API key
         self.c = cdsapi.Client(key=cdsapi_key,
                                url='https://cds-beta.climate.copernicus.eu/api')
 
@@ -105,7 +111,7 @@ class SEAS5():
             outpath : str
                 Output path to save files.
             year_range : (int, int), optional
-                Year range subset to use to fit the model.
+                Year range to download.
             months : list, optional
                 List of months to download. Defaults to full year.
             hindcast : boolean, optional
@@ -241,13 +247,13 @@ class SEAS5():
             vname : str
                 Variable name (internal).
             month : int
-                Month
+                Forecast month.
             year_range : (int, int), optional
-                Year range subset to use to fit the model.
+                Year range to process.
             hindcast : boolean, optional
-                Download hindcast data (1981-2016). Defaults to False.
+                Use hindcast data (1981-2016). Defaults to False.
             forecast : boolean, optional
-                Download forecast data (2017-present). Defaults to True.
+                Use forecast data (2017-present). Defaults to True.
             to_monthly : boolean, optional
                 Convert datetimes to (year, month) dimensions.
             lat_range : (float, float), optional
@@ -281,6 +287,71 @@ class SEAS5():
                             for fpath in fpaths], dim='time')
         return xr.Dataset({'mean': da_mean if not to_monthly else self._to_monthly(da_mean),
                            'stdev': da_stdev if not to_monthly else self._to_monthly(da_stdev)})
+
+    def calc_clim(self, inpath, vname, year_from, year_to):
+        """Calculate climatology for all months.
+
+        Parameters
+        ----------
+            inpath : str
+                Input path to raw download data.
+            vname : str
+                Variable name (internal).
+            year_from : int
+                Year from.
+            year_to : int
+                Year to.
+        """
+        clim = [self.proc(inpath, vname, fmonth, hindcast=True,
+                          year_range=(year_from,year_to)
+                          )['mean'].mean(dim=['year','number'])
+                for fmonth in tqdm(range(1, 13))]
+        return xr.concat(clim, dim=pd.Index(range(1, 13), name='fmonth'))
+
+    def load_clim(self, vname, year_from, year_to):
+        """Load precomputed climatology.
+
+        Parameters
+        ----------
+            vname : str
+                Variable name (internal).
+            year_from : int
+                Year from.
+            year_to : int
+                Year to.
+        """
+
+        fname =  f'{vname}_{year_from}_{year_to}.zarr'
+        self.clim = xr.open_dataset(os.path.join(self.climpath, fname),
+                                    engine='zarr')['mean'].rename(vname)
+        return self.clim
+
+    def calc_anoms(self, ds, fyear, fmonth, month):
+        """Calculate forecast anomalies from forecast and climatology.
+
+        Parameters
+        ----------
+            ds : xarray.Dataset
+                Single month-variable's forecast as produced by self.proc().
+            fyear : int
+                Year of forecast.
+            fmonth : int
+                Month of forecast.
+            month : int
+                Month for which the forecast is being made.
+
+        Returns
+        -------
+            ds : xarray.Dataset
+                Processed Dataset.
+        """
+
+        # Calulate year (for lead times <12 months)
+        lead_months = (month - fmonth) % 12
+        year = fyear + (fmonth + lead_months)//12
+        return (ds.sel(year=year, month=month) -
+                self.clim.sel(fmonth=fmonth, month=month))
+
 
 # If running the module as a whole, only download a single month's forecast
 if __name__ == '__main__':
