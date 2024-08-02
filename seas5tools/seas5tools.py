@@ -94,7 +94,7 @@ class SEAS5():
                         os.path.join(outpath, fname))
 
     def download(self, vname, outpath, year_range=(None,None), months=None,
-                 hindcast=False, forecast=True, overwrite=False):
+                 hindcast=False, forecast=True, overwrite=False, skip_error=False):
         """Download SEAS5 hindcast (1981-2016) or operational (2017-present)
         seasonal monthly statistics on single levels for a single variable.
 
@@ -115,6 +115,9 @@ class SEAS5():
             overwrite : boolean, optional
                 If True, don't check for existence of file before downloading.
                 Defaults to False.
+            skip_error : boolean, optional
+                If True, skips any download errors via try-except.
+                Defaults to True.
         """
 
         years = self._year_range2years(year_range, hindcast, forecast)
@@ -128,10 +131,13 @@ class SEAS5():
                 if not overwrite and os.path.exists(os.path.join(outpath, fname)):
                     print(f'Skipping {fname} as it exists in directory.')
                 else:
-                    try:
+                    if skip_error:
+                        try:
+                            self._get_seas51_month(vname, year, month, outpath)
+                        except:
+                            print(f'*** FAILED {vname} {year}-{month:02} ***')
+                    else:
                         self._get_seas51_month(vname, year, month, outpath)
-                    except:
-                        print(f'*** FAILED {vname} {year}-{month:02} ***')
 
     def convert(self, ds, vname, additive, lat_range=(None,None),
                 lon_range=(None,None)):

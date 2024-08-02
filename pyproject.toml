@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "seas5tools"
-version = "0.0.4"
+version = "0.0.5"
 description = "Tools for processing ECMWF SEAS5 seasonal forecasts"
 authors = [
            { name = "Mutahar Chalmers", email = "mutahar.chalmers@gmail.com" },
