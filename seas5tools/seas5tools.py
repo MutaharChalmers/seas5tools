@@ -96,8 +96,8 @@ class SEAS5():
                                           'monthly_maximum','monthly_minimum'],
                          'year': year,
                          'month': month,
-                         'leadtime_month': [1,2,3,4,5,6]},
-                        os.path.join(outpath, fname))
+                         'leadtime_month': [1,2,3,4,5,6]}
+                       ).download(os.path.join(outpath, fname))
 
     def download(self, vname, outpath, year_range=(None,None), months=None,
                  hindcast=False, forecast=True, overwrite=False, skip_error=False):
