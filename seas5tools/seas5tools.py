@@ -275,13 +275,15 @@ class SEAS5():
         # Generate combined DataArray for all months for this variable
         da_mean = xr.concat([self.convert(xr.open_dataset(fpath,
                                                           filter_by_keys={'dataType': 'fcmean'},
-                                                          engine='cfgrib'),
+                                                          engine='cfgrib',
+                                                          backend_kwargs={'indexpath':''}),
                                           vname=vname, additive=True,
                                           lat_range=lat_range, lon_range=lon_range)
                             for fpath in fpaths], dim='time')
         da_stdev = xr.concat([self.convert(xr.open_dataset(fpath,
                                                            filter_by_keys={'dataType': 'fcstdev'},
-                                                           engine='cfgrib'),
+                                                           engine='cfgrib',
+                                                           backend_kwargs={'indexpath':''}),
                                            vname=vname, additive=False,
                                            lat_range=lat_range, lon_range=lon_range)
                             for fpath in fpaths], dim='time')
@@ -365,11 +367,11 @@ if __name__ == '__main__':
         # No year or month passed
         now = dt.date.today()
         seas5.download(vname, outpath, year_range=(now.year, now.year),
-                       months=[now.month], hindcast=False, forecast=True, 
+                       months=[now.month], hindcast=False, forecast=True,
                        overwrite=False)
     else:
         year = sys.argv[4]
         month = sys.argv[5]
         seas5.download(vname, outpath, year_range=(int(year), int(year)),
-                       months=[int(month)], hindcast=False, forecast=True, 
+                       months=[int(month)], hindcast=False, forecast=True,
                        overwrite=False)
