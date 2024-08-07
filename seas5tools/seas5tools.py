@@ -350,7 +350,7 @@ class SEAS5():
 
         # Calulate year (for lead times <12 months)
         lead_months = (month - fmonth) % 12
-        year = fyear + (fmonth + lead_months)//12
+        year = fyear + (fmonth + lead_months - 1)//12
         return (ds.sel(year=year, month=month) -
                 self.clim.sel(fmonth=fmonth, month=month))
 
