@@ -328,31 +328,42 @@ class SEAS5():
                                     engine='zarr')['mean'].rename(vname)
         return self.clim
 
-    def calc_anoms(self, ds, fyear, fmonth, month):
+    def calc_anoms(self, inpath, vname, fyear, fmonth,
+                   clim_year_range=(1993, 2016)):
         """Calculate forecast anomalies from forecast and climatology.
 
         Parameters
         ----------
-            ds : xarray.Dataset
-                Single month-variable's forecast as produced by self.proc().
+            inpath : str
+                Input path to SEAS5 data.
+            vname : str
+                Variable name.
             fyear : int
                 Year of forecast.
             fmonth : int
                 Month of forecast.
-            month : int
-                Month for which the forecast is being made.
+            clim_year_range : (int, int), optional
+                Year range of climatology used to calculate anomalies.
+                Defaults to (1993, 2016) per SEAS5 documentation. If
+                a different range is specified, it must be pre-calculated.
 
         Returns
         -------
-            ds : xarray.Dataset
-                Processed Dataset.
+            da : DataArray
+                Processed DataArray of anomalies.
         """
 
-        # Calulate year (for lead times <12 months)
-        lead_months = (month - fmonth) % 12
-        year = fyear + (fmonth + lead_months - 1)//12
-        return (ds.sel(year=year, month=month) -
-                self.clim.sel(fmonth=fmonth, month=month))
+        # Load Dataset of forecasts and climatology
+        ds = self.proc(inpath, vname, fmonth, (fyear, fyear), hindcast=True)
+        clim = self.load_clim(vname, *clim_year_range).sel(fmonth=fmonth)
+
+        # Calulate year(s) and months (for lead times <12 months)
+        months = ds.month.values
+        lead_months = (months - fmonth) % 12
+        years = fyear + (fmonth + lead_months - 1)//12
+
+        return xr.merge([ds.sel(year=[y], month=[m]) - clim.sel(month=[m])
+                         for y, m in zip(years, months)])['mean'].rename(vname)
 
 
 # If running the module as a whole, only download a single month's forecast
